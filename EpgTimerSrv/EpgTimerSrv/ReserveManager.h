@@ -4,10 +4,7 @@
 #include "../../Common/EpgTimerUtil.h"
 #include "../../Common/PathUtil.h"
 #include "../../Common/StringUtil.h"
-#include "../../Common/ParseReserveText.h"
-#include "../../Common/ParseRecInfoText.h"
-#include "../../Common/ParseChText5.h"
-#include "../../Common/ParseSearchChgText.h"
+#include "../../Common/ParseTextInstances.h"
 
 #include "TwitterManager.h"
 
@@ -41,11 +38,6 @@ public:
 	//戻り値：
 	// TRUE（成功）、FALSE（失敗）
 	BOOL ReloadReserveData();
-
-	//予約情報を追加で読み込む
-	//戻り値：
-	// TRUE（成功）、FALSE（失敗）
-	BOOL AddLoadReserveData();
 
 	//予約情報を取得する
 	//戻り値：
@@ -238,11 +230,10 @@ protected:
 	CParseRecInfoText recInfoText;
 
 	CParseChText5 chUtil;
-	CParseSearchChgText chgText;
 
 	CTunerManager tunerManager;
 	CBatManager batManager;
-	CTwitterManager twitterManager;
+	CTwitterManager* twitterManager;
 	CNWCoopManager nwCoopManager;
 	CRecInfoDBManager recInfoManager;
 

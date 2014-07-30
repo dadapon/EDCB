@@ -5,14 +5,13 @@
 #include <process.h>
 
 #include "../../Common/ReNamePlugInUtil.h"
-#include "../../Common/ParseRecInfoText.h"
 
 CTunerBankCtrl::CTunerBankCtrl(void)
 {
-	this->lockEvent = _CreateEvent(FALSE, TRUE, NULL);
+	this->lockEvent = CreateEvent(NULL, FALSE, TRUE, NULL);
 
 	this->checkThread = NULL;
-	this->checkStopEvent = _CreateEvent(FALSE, FALSE, NULL);
+	this->checkStopEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
 
 	this->openTuner = FALSE;
 	this->processID = 0;
@@ -908,8 +907,8 @@ BOOL CTunerBankCtrl::OpenTuner(BOOL viewMode, SET_CH_INFO* initCh)
 
 BOOL CTunerBankCtrl::FindPartialService(WORD ONID, WORD TSID, WORD SID, WORD* partialSID, wstring* serviceName)
 {
-	multimap<LONGLONG, CH_DATA4>::iterator itr;
-	for( itr = this->chUtil.chList.begin(); itr != this->chUtil.chList.end(); itr++ ){
+	map<DWORD, CH_DATA4>::const_iterator itr;
+	for( itr = this->chUtil.GetMap().begin(); itr != this->chUtil.GetMap().end(); itr++ ){
 		if( itr->second.originalNetworkID == ONID && itr->second.transportStreamID == TSID && itr->second.partialFlag == TRUE ){
 			if( itr->second.serviceID != SID ){
 				if( partialSID != NULL ){
@@ -1503,11 +1502,14 @@ void CTunerBankCtrl::SaveProgramInfo(wstring savePath, EPGDB_EVENT_INFO* info, B
 {
 	wstring outText = L"";
 	wstring serviceName = L"";
-	multimap<LONGLONG, CH_DATA4>::iterator itr;
-	LONGLONG key = _Create64Key(info->original_network_id, info->transport_stream_id, info->service_id);
-	itr = chUtil.chList.find(key);
-	if( itr != chUtil.chList.end() ){
-		serviceName = itr->second.serviceName;
+	map<DWORD, CH_DATA4>::const_iterator itr;
+	for( itr = chUtil.GetMap().begin(); itr != chUtil.GetMap().end(); itr++ ){
+		if( itr->second.originalNetworkID == info->original_network_id &&
+		    itr->second.transportStreamID == info->transport_stream_id &&
+		    itr->second.serviceID == info->service_id ){
+			serviceName = itr->second.serviceName;
+			break;
+		}
 	}
 	_ConvertEpgInfoText2(info, outText, serviceName);
 
@@ -1516,13 +1518,13 @@ void CTunerBankCtrl::SaveProgramInfo(wstring savePath, EPGDB_EVENT_INFO* info, B
 
 	HANDLE file = INVALID_HANDLE_VALUE;
 	if(addMode == TRUE ){
-		file = _CreateFile2( savePath.c_str(), GENERIC_WRITE|GENERIC_READ, FILE_SHARE_READ, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL );
+		file = _CreateDirectoryAndFile( savePath.c_str(), GENERIC_WRITE|GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL );
 		SetFilePointer(file, 0, NULL, FILE_END);
 		string buff2 = "\r\n-----------------------\r\n";
 		DWORD dwWrite;
 		WriteFile(file, buff2.c_str(), (DWORD)buff2.size(), &dwWrite, NULL);
 	}else{
-		file = _CreateFile2( savePath.c_str(), GENERIC_WRITE|GENERIC_READ, FILE_SHARE_READ, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL );
+		file = _CreateDirectoryAndFile( savePath.c_str(), GENERIC_WRITE|GENERIC_READ, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL );
 	}
 	if( file != INVALID_HANDLE_VALUE ){
 		DWORD dwWrite;
@@ -1574,11 +1576,11 @@ BOOL CTunerBankCtrl::RecStart(LONGLONG nowTime, RESERVE_WORK* reserve, BOOL send
 				info.tunerID = this->tunerID & 0x0000FFFF;
 
 				EPG_EVENT_INFO* epgInfo = NULL;
-				EPGDB_EVENT_INFO* epgDBInfo;
+				EPGDB_EVENT_INFO epgDBInfo;
 				if( this->epgDBManager != NULL && info.EventID != 0xFFFF ){
 					if( this->epgDBManager->SearchEpg(info.ONID, info.TSID, info.SID, info.EventID, &epgDBInfo) == TRUE ){
 						epgInfo = new EPG_EVENT_INFO;
-						CopyEpgInfo(epgInfo, epgDBInfo);
+						CopyEpgInfo(epgInfo, &epgDBInfo);
 					}
 				}
 				if( epgInfo != NULL ){
@@ -1665,11 +1667,11 @@ BOOL CTunerBankCtrl::RecStart(LONGLONG nowTime, RESERVE_WORK* reserve, BOOL send
 							info.tunerID = this->tunerID & 0x0000FFFF;
 
 							EPG_EVENT_INFO* epgInfo = NULL;
-							EPGDB_EVENT_INFO* epgDBInfo;
+							EPGDB_EVENT_INFO epgDBInfo;
 							if( this->epgDBManager != NULL && info.EventID != 0xFFFF ){
 								if( this->epgDBManager->SearchEpg(info.ONID, info.TSID, info.SID, info.EventID, &epgDBInfo) == TRUE ){
 									epgInfo = new EPG_EVENT_INFO;
-									CopyEpgInfo(epgInfo, epgDBInfo);
+									CopyEpgInfo(epgInfo, &epgDBInfo);
 								}
 							}
 							if( epgInfo != NULL ){
@@ -1726,11 +1728,11 @@ BOOL CTunerBankCtrl::RecStart(LONGLONG nowTime, RESERVE_WORK* reserve, BOOL send
 							info.tunerID = this->tunerID & 0x0000FFFF;
 
 							EPG_EVENT_INFO* epgInfo = NULL;
-							EPGDB_EVENT_INFO* epgDBInfo;
+							EPGDB_EVENT_INFO epgDBInfo;
 							if( this->epgDBManager != NULL && info.EventID != 0xFFFF ){
 								if( this->epgDBManager->SearchEpg(info.ONID, info.TSID, info.SID, info.EventID, &epgDBInfo) == TRUE ){
 									epgInfo = new EPG_EVENT_INFO;
-									CopyEpgInfo(epgInfo, epgDBInfo);
+									CopyEpgInfo(epgInfo, &epgDBInfo);
 								}
 							}
 							if( epgInfo != NULL ){

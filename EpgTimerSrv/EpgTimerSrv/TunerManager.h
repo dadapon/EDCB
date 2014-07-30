@@ -4,7 +4,7 @@
 #include "../../Common/EpgTimerUtil.h"
 #include "../../Common/PathUtil.h"
 #include "../../Common/StringUtil.h"
-#include "../../Common/ParseChText4.h"
+#include "../../Common/ParseTextInstances.h"
 
 #include "TunerCtrl.h"
 #include "TunerBankCtrl.h"
@@ -69,8 +69,9 @@ public:
 		DWORD* ch
 		);
 
+	//ドライバ毎のチューナー一覧とEPG取得に使用できるチューナー数のペアを取得する
 	BOOL GetEnumEpgCapTuner(
-		vector<DWORD>* idList
+		vector<pair<vector<DWORD>, WORD>>* idList
 		);
 
 	BOOL IsSupportService(
@@ -90,7 +91,7 @@ protected:
 		WORD bonID;
 		WORD tunerID;
 		wstring bonFileName;
-		BOOL epgCapFlag;
+		WORD epgCapMaxOfThisBon;
 		CParseChText4 chUtil;
 		wstring chSet4FilePath;
 	}TUNER_INFO;
