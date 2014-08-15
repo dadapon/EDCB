@@ -6,12 +6,12 @@ template <class K, class V>
 class CParseText
 {
 public:
-	CParseText() {}
+	CParseText() : saveWide(false) {}
 	virtual ~CParseText() {}
 	bool ParseText(LPCWSTR filePath = NULL);
 	const map<K, V>& GetMap() const { return this->itemMap; }
 	const wstring& GetFilePath() const { return this->filePath; }
-	void SetFilePath(LPCWSTR filePath) { this->filePath = filePath; }
+	void SetFilePath(LPCWSTR filePath) { this->filePath = filePath; this->saveWide = false; }
 protected:
 	bool SaveText() const;
 	virtual bool ParseLine(const wstring& parseLine, pair<K, V>& item) = 0;
@@ -20,12 +20,14 @@ protected:
 	virtual bool SelectIDToSave(vector<K>& sortList) const { return false; }
 	map<K, V> itemMap;
 	wstring filePath;
+	bool saveWide;
 };
 
 template <class K, class V>
 bool CParseText<K, V>::ParseText(LPCWSTR filePath)
 {
 	this->itemMap.clear();
+	this->saveWide = false;
 	if( filePath != NULL ){
 		this->filePath = filePath;
 	}
@@ -47,6 +49,7 @@ bool CParseText<K, V>::ParseText(LPCWSTR filePath)
 		Sleep(200 * retry);
 	}
 
+	bool checkWide = false;
 	vector<char> buf;
 	string parseLineA;
 	wstring parseLine;
@@ -56,29 +59,61 @@ bool CParseText<K, V>::ParseText(LPCWSTR filePath)
 		DWORD dwRead;
 		if( ReadFile(hFile, &buf.front() + buf.size() - 4096, 4096, &dwRead, NULL) == FALSE || dwRead == 0 ){
 			buf.resize(buf.size() - 4096);
-			buf.push_back('\0');
+			buf.insert(buf.end(), 3, '\0');
 		}else{
 			buf.resize(buf.size() - 4096 + dwRead);
 		}
-		//完全に読み込まれた行をできるだけ解析
-		for( size_t i = 0; i < buf.size(); i++ ){
-			if( buf[i] == '\0' || buf[i] == '\r' && i + 1 < buf.size() && buf[i + 1] == '\n' ){
-				parseLineA.assign(buf.begin(), buf.begin() + i);
-				AtoW(parseLineA, parseLine);
-				pair<K, V> item;
-				if( ParseLine(parseLine, item) ){
-					this->itemMap.insert(item);
-				}
-				if( buf[i] == '\0' ){
-					buf.erase(buf.begin(), buf.begin() + i);
-					break;
-				}
-				buf.erase(buf.begin(), buf.begin() + i + 2);
-				i = 0;
+		if( checkWide == false ){
+			checkWide = true;
+			if( buf.size() >= 2 && buf[0] == '\xFF' && buf[1] == '\xFE' ){
+				this->saveWide = true;
+				buf.erase(buf.begin(), buf.begin() + 2);
 			}
 		}
-		if( buf.empty() == false && buf[0] == '\0' ){
-			break;
+		//完全に読み込まれた行をできるだけ解析
+		if( this->saveWide ){
+			for( size_t i = 0; i + 1 < buf.size(); i += 2 ){
+				if( buf[i] == '\0' && buf[i + 1] == '\0' ||
+				    buf[i] == '\r' && buf[i + 1] == '\0' && i + 3 < buf.size() && buf[i + 2] == '\n' && buf[i + 3] == '\0' ){
+					parseLine.clear();
+					for( size_t j = 0; j + 1 < i; j += 2 ){
+						parseLine.push_back((buf[j] & 0xFF) | buf[j + 1] << 8);
+					}
+					pair<K, V> item;
+					if( ParseLine(parseLine, item) ){
+						this->itemMap.insert(item);
+					}
+					if( buf[i] == '\0' ){
+						buf.erase(buf.begin(), buf.begin() + i);
+						break;
+					}
+					buf.erase(buf.begin(), buf.begin() + i + 4);
+					i = 0;
+				}
+			}
+			if( buf.size() >= 2 && buf[0] == '\0' && buf[1] == '\0' ){
+				break;
+			}
+		}else{
+			for( size_t i = 0; i < buf.size(); i++ ){
+				if( buf[i] == '\0' || buf[i] == '\r' && i + 1 < buf.size() && buf[i + 1] == '\n' ){
+					parseLineA.assign(buf.begin(), buf.begin() + i);
+					AtoW(parseLineA, parseLine);
+					pair<K, V> item;
+					if( ParseLine(parseLine, item) ){
+						this->itemMap.insert(item);
+					}
+					if( buf[i] == '\0' ){
+						buf.erase(buf.begin(), buf.begin() + i);
+						break;
+					}
+					buf.erase(buf.begin(), buf.begin() + i + 2);
+					i = 0;
+				}
+			}
+			if( buf.empty() == false && buf[0] == '\0' ){
+				break;
+			}
 		}
 	}
 	CloseHandle(hFile);
@@ -103,6 +138,10 @@ bool CParseText<K, V>::SaveText() const
 		Sleep(200 * retry);
 	}
 
+	DWORD dwWrite;
+	if( this->saveWide ){
+		WriteFile(hFile, L"\uFEFF", 2, &dwWrite, NULL);
+	}
 	wstring saveLine;
 	string saveLineA;
 	vector<K> idList;
@@ -111,29 +150,41 @@ bool CParseText<K, V>::SaveText() const
 			map<K, V>::const_iterator itr = this->itemMap.find(idList[i]);
 			saveLine.clear();
 			if( itr != this->itemMap.end() && SaveLine(*itr, saveLine) ){
-				WtoA(saveLine, saveLineA);
-				saveLineA += "\r\n";
-				DWORD dwWrite;
-				WriteFile(hFile, saveLineA.c_str(), (DWORD)saveLineA.size(), &dwWrite, NULL);
+				if( this->saveWide ){
+					saveLine += L"\r\n";
+					WriteFile(hFile, saveLine.c_str(), (DWORD)saveLine.size() * 2, &dwWrite, NULL);
+				}else{
+					WtoA(saveLine, saveLineA);
+					saveLineA += "\r\n";
+					WriteFile(hFile, saveLineA.c_str(), (DWORD)saveLineA.size(), &dwWrite, NULL);
+				}
 			}
 		}
 	}else{
 		for( map<K, V>::const_iterator itr = this->itemMap.begin(); itr != this->itemMap.end(); itr++ ){
 			saveLine.clear();
 			if( SaveLine(*itr, saveLine) ){
-				WtoA(saveLine, saveLineA);
-				saveLineA += "\r\n";
-				DWORD dwWrite;
-				WriteFile(hFile, saveLineA.c_str(), (DWORD)saveLineA.size(), &dwWrite, NULL);
+				if( this->saveWide ){
+					saveLine += L"\r\n";
+					WriteFile(hFile, saveLine.c_str(), (DWORD)saveLine.size() * 2, &dwWrite, NULL);
+				}else{
+					WtoA(saveLine, saveLineA);
+					saveLineA += "\r\n";
+					WriteFile(hFile, saveLineA.c_str(), (DWORD)saveLineA.size(), &dwWrite, NULL);
+				}
 			}
 		}
 	}
 	saveLine.clear();
 	if( SaveFooterLine(saveLine) ){
-		WtoA(saveLine, saveLineA);
-		saveLineA += "\r\n";
-		DWORD dwWrite;
-		WriteFile(hFile, saveLineA.c_str(), (DWORD)saveLineA.size(), &dwWrite, NULL);
+		if( this->saveWide ){
+			saveLine += L"\r\n";
+			WriteFile(hFile, saveLine.c_str(), (DWORD)saveLine.size() * 2, &dwWrite, NULL);
+		}else{
+			WtoA(saveLine, saveLineA);
+			saveLineA += "\r\n";
+			WriteFile(hFile, saveLineA.c_str(), (DWORD)saveLineA.size(), &dwWrite, NULL);
+		}
 	}
 	CloseHandle(hFile);
 	return true;
