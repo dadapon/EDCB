@@ -1012,8 +1012,6 @@ public:
 	}
 
 protected:
-	HANDLE lockEvent;
-
 	BOOL tcpFlag;
 	DWORD connectTimeOut;
 	wstring eventName;
@@ -1022,10 +1020,6 @@ protected:
 	DWORD port;
 
 protected:
-	//PublicAPIîrëºêßå‰óp
-	BOOL Lock(LPCWSTR log = NULL, DWORD timeOut = 60*1000);
-	void UnLock(LPCWSTR log = NULL);
-
 	DWORD SendPipe(LPCWSTR pipeName, LPCWSTR eventName, DWORD timeOut, CMD_STREAM* send, CMD_STREAM* res);
 	DWORD SendTCP(wstring ip, DWORD port, DWORD timeOut, CMD_STREAM* sendCmd, CMD_STREAM* resCmd);
 
